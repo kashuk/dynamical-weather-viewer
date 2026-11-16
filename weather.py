@@ -195,7 +195,12 @@ def _encode_frames(vals, spec, out_dir):
 
 def _write_layer(ds, model, layer, init_iso, arrays):
     spec = LAYERS[layer]
-    vals = _downsample(np.nan_to_num(spec["fn"](arrays), nan=spec["vmin"]))
+    vals = spec["fn"](arrays)
+    # Averaged fields (cloud cover, precipitation) have no value at lead 0: borrow the next frame.
+    for i in range(vals.shape[0] - 1):
+        if np.isnan(vals[i]).mean() > 0.5:
+            vals[i] = vals[i + 1]
+    vals = _downsample(np.nan_to_num(vals, nan=spec["vmin"]))
     out_dir = os.path.join(CACHE, model, _run_id(init_iso), layer)
     t = time.time()
     frames = _encode_frames(vals, spec, out_dir)
@@ -243,10 +248,15 @@ def cached(model):
     }
 
 
-def latest(model):
-    """Newest run whose first 105 h are complete, plus its temperature layer (which the check reads anyway)."""
+def latest(model, known=""):
+    """Newest run whose first 105 h are complete, plus its temperature layer (which the check reads anyway).
+
+    `known` is the init_time the page already shows: if the store has nothing newer, answer without reading.
+    """
     ds = _open(model)
     inits = ds.init_time.values
+    if known and _init_iso(inits[-1]) == known:
+        return {"init_time": known, "layer": None}
     for k in range(1, 5):
         init_iso = _init_iso(inits[-k])
         a = _read(ds, "temperature_2m", init_iso)
@@ -264,7 +274,7 @@ def fetch_layer(model, layer, init_iso):
         raise ValueError("init is required (an ISO init_time from the latest action)")
     ds = _open(model)
     arrays = [_read(ds, v, init_iso) for v in LAYERS[layer]["vars"]]
-    nan_frac = float(np.isnan(arrays[0]).mean())
+    nan_frac = float(np.isnan(arrays[0][1:]).mean())   # lead 0 is legitimately empty for averaged fields
     if nan_frac > MAX_NAN:
         raise RuntimeError(f"run {init_iso} is still being written ({nan_frac:.1%} missing)")
     return _write_layer(ds, model, layer, init_iso, arrays)
@@ -376,7 +386,7 @@ def basemap(model):
 
 # ----------------------------------------------------------------------------- entry
 
-def main(action: str = "cached", model: str = "gfs", layer: str = "temperature", init: str = ""):
+def main(action: str = "cached", model: str = "gfs", layer: str = "temperature", init: str = "", known: str = ""):
     if model not in MODELS:
         raise ValueError(f"unknown model {model!r}")
     os.makedirs(CACHE, exist_ok=True)
@@ -385,7 +395,7 @@ def main(action: str = "cached", model: str = "gfs", layer: str = "temperature",
         if action == "cached":
             return cached(model)
         if action == "latest":
-            return latest(model)
+            return latest(model, known)
         if action == "layer":
             return fetch_layer(model, layer, init)
         if action == "basemap":

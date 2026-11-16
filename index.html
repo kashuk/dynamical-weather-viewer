@@ -34,8 +34,8 @@
     --line: var(--fused-border, #d9dde3);
     --accent: var(--fused-accent, #2a6fd6);
     --error: var(--fused-error, #d03b3b);
-    --globe: #f5f6f8;
-    --ocean: #e6e9ee;
+    --globe: #ffffff;
+    --ocean: #edeff3;
     --ink: #4a5260;
     --slice-ink: #2b313c;
     --glass: rgba(172, 188, 212, 0.17);
@@ -66,12 +66,13 @@
     border-radius: 14px;
     box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--text) 35%, transparent);
   }
-  .hud-top { top: 18px; left: 18px; padding: 12px 16px 11px; max-width: 300px; }
+  .hud-left { top: 18px; left: 18px; width: 240px; display: flex; flex-direction: column; gap: 10px; }
+  .hud-top { padding: 12px 14px 11px; }
   .hud-top h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   .hud-top .sub { margin-top: 3px; color: var(--muted); font-size: 11.5px; }
   .hud-top .sub b { color: var(--text); font-weight: 500; }
 
-  .hud-layers { top: 92px; left: 18px; width: 236px; padding: 6px; }
+  .hud-layers { padding: 6px; }
   .row {
     display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 10px;
     padding: 7px 9px; border-radius: 9px; cursor: pointer; position: relative;
@@ -146,7 +147,8 @@
   .nogl { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); padding: 24px; text-align: center; }
 
   @media (max-width: 760px) {
-    .hud-layers { top: auto; bottom: 108px; width: 200px; }
+    .hud-left { width: 200px; }
+    .hud-top .sub { display: none; }
     .hud-tools { display: none; }
     .time { min-width: 0; }
     .ticks { display: none; }
@@ -156,15 +158,16 @@
 <body>
   <div id="stage"><canvas id="gl"></canvas></div>
 
-  <header class="hud card hud-top">
-    <h1>Weather layers</h1>
-    <div class="sub" id="runLabel">NOAA GFS · dynamical.org</div>
-  </header>
-
-  <aside class="hud card hud-layers">
-    <div id="rows"></div>
-    <div class="status" id="status"></div>
-  </aside>
+  <div class="hud hud-left">
+    <header class="card hud-top">
+      <h1>Weather layers</h1>
+      <div class="sub" id="runLabel">NOAA GFS · dynamical.org</div>
+    </header>
+    <aside class="card hud-layers">
+      <div id="rows"></div>
+      <div class="status" id="status"></div>
+    </aside>
+  </div>
 
   <div class="hud card hud-tools">
     <label class="tool">Spread <input id="spread" type="range" min="0.4" max="1.8" step="0.05" value="1" /></label>
@@ -337,8 +340,8 @@ void main(){
   float diff = max(dot(n, L), 0.0);
   vec3 V = normalize(u_eye - v_pos);
   float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-  col *= 0.64 + 0.40 * diff;
-  col *= 1.0 - 0.2 * rim;
+  col *= 0.72 + 0.34 * diff;
+  col *= 1.0 - 0.16 * rim;
   o = vec4(col, 1.0);
 }`;
 
@@ -400,7 +403,7 @@ void main(){
         float line = 1.0 - smoothstep(0.0, fw * 1.6, min(g, 1.0 - g) - fw * 0.3);
         float f5 = hpa / 20.0, g5 = fract(f5), fw5 = max(fwidth(f5), 1e-4);
         float line5 = 1.0 - smoothstep(0.0, fw5 * 1.6, min(g5, 1.0 - g5) - fw5 * 0.55);
-        float la = max(line * 0.5, line5 * 0.9);
+        float la = max(line * 0.38, line5 * 0.62);
         d = vec4(mix(d.rgb, u_ink, la), max(d.a, la));
       }
       if (u_hasBase > 0.5) {
@@ -574,8 +577,8 @@ void main(){ float r = length(v_q); float a = (1.0 - smoothstep(0.15, 1.0, r)) *
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-    const hud = document.querySelector('.hud-layers');
-    state.hudShift = hud && getComputedStyle(hud).display !== 'none' ? (hud.getBoundingClientRect().right + 18) / canvas.clientWidth * 0.9 : 0;
+    const hud = document.querySelector('.hud-left');
+    state.hudShift = hud ? (hud.getBoundingClientRect().right + 18) / canvas.clientWidth * 0.8 : 0;
   }
   function sceneColors() {
     state.colors = {
@@ -599,10 +602,12 @@ void main(){ float r = length(v_q); float a = (1.0 - smoothstep(0.15, 1.0, r)) *
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     const aspect = canvas.width / canvas.height;
-    const dist = 6.2 / state.zoom, yaw = state.yaw * Math.PI / 180, pitch = state.pitch * Math.PI / 180;
+    // fit the whole stack with margins whatever the viewport shape
+    const dist = Math.max(9.0, 11.0 / Math.max(aspect * (1 - state.hudShift * 0.6), 0.5)) / state.zoom;
+    const yaw = state.yaw * Math.PI / 180, pitch = state.pitch * Math.PI / 180;
     const eye = [dist * Math.cos(pitch) * Math.sin(yaw), dist * Math.sin(pitch), dist * Math.cos(pitch) * Math.cos(yaw)];
-    const proj = perspective(31 * Math.PI / 180, aspect, 0.1, 60), view = lookAt(eye, [0, 0, 0], [0, 1, 0]);
-    const shift = [state.hudShift, 0.06];
+    const proj = perspective(31 * Math.PI / 180, aspect, 0.1, 80), view = lookAt(eye, [0, 0, 0], [0, 1, 0]);
+    const shift = [state.hudShift, 0.12];
     const C = state.colors, lon0 = state.lon * Math.PI / 180;
 
     // globe
@@ -660,7 +665,7 @@ void main(){ float r = length(v_q); float a = (1.0 - smoothstep(0.15, 1.0, r)) *
   function requestRender() { needsRender = true; if (!rafId) rafId = requestAnimationFrame(tick); }
   function tick(now) {
     rafId = 0;
-    const dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
+    const dt = Math.min(0.5, (now - (lastT || now)) / 1000); lastT = now;
     let animating = false;
     if (state.playing && state.run) {
       const n = state.run.n, prev = Math.floor(state.tf);
@@ -731,7 +736,7 @@ void main(){ float r = length(v_q); float a = (1.0 - smoothstep(0.15, 1.0, r)) *
     const t = $('#ticks'); t.innerHTML = ''; $('#scrub').max = run.n - 1;
     run.lead.forEach((h, i) => {
       const d = new Date(run.initMs + h * 3600e3);
-      if (d.getUTCHours() === 0 || i === 0) { const s = document.createElement('span'); s.style.left = (i / (run.n - 1) * 100) + '%'; s.textContent = fmtDay(d); t.appendChild(s); }
+      if (d.getUTCHours() === 0) { const s = document.createElement('span'); s.style.left = (i / (run.n - 1) * 100) + '%'; s.textContent = fmtDay(d); t.appendChild(s); }
     });
   }
 
@@ -861,14 +866,14 @@ void main(){ float r = length(v_q); float a = (1.0 - smoothstep(0.15, 1.0, r)) *
     // newest run from dynamical.org, in the background
     setStatus('Checking dynamical.org for the newest run…');
     let latest;
-    try { latest = await py({ action: 'latest' }, 'latest'); }
+    try { latest = await py({ action: 'latest', known: current ? current.init_time : '' }, 'latest'); }
     catch (e) { setStatus(current ? 'Showing the cached run · could not reach dynamical.org' : 'Could not reach dynamical.org: ' + (e.message || e), true); console.warn(e); return; }
     const haveAll = current && current.init_time === latest.init_time && state.order.every((id) => current.layers[id]);
     if (!info.basemap) py({ action: 'basemap' }, 'basemap').then(loadBasemap).catch((e) => console.warn('basemap', e));
     if (haveAll) { setStatus(''); return; }
     const target = current && current.init_time === latest.init_time ? current : makeRun(latest.init_time, latest.layer.lead_hours);
     const progressive = !current || target === current;
-    if (!target.layers.temperature) { target.layers.temperature = await loadLayer(latest.layer); }
+    if (!target.layers.temperature && latest.layer) { target.layers.temperature = await loadLayer(latest.layer); }
     if (progressive) { if (!state.run) showRun(target); layoutPanes(); requestRender(); }
     setStatus(progressive ? 'Fetching layers from dynamical.org…' : `Fetching the ${hh(new Date(target.initMs))}z run…`);
     const missing = state.order.filter((id) => !target.layers[id]);
@@ -880,6 +885,18 @@ void main(){ float r = length(v_q); float a = (1.0 - smoothstep(0.15, 1.0, r)) *
 
   P.onChange(draw);
   boot().catch((e) => console.error(e));
+  // debug hook: lets a test harness inspect state and grab a frame (render + toDataURL in one task)
+  window.__wx = {
+    state, panes, draw,
+    settle: () => { for (const p of panes.values()) { p.alpha = p.show ? 1 : 0; p.zCur = p.zTarget; } },
+    frame: () => {
+      render(0);
+      const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+      const x = c.getContext('2d'); cctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+      x.fillStyle = cctx.fillStyle; x.fillRect(0, 0, c.width, c.height); x.drawImage(canvas, 0, 0);
+      return c.toDataURL('image/png');
+    },
+  };
 })();
 </script>
 </body>

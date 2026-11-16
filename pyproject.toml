@@ -1,0 +1,18 @@
+# weather.py reads dynamical.org Icechunk stores: these are its third-party imports.
+[project]
+name = "dynamical-weather-viewer"
+version = "0.1.0"
+description = "Exploded 3D stack of NOAA GFS weather layers from dynamical.org"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "xarray>=2025.1",
+    "zarr>=3.0.8",
+    "icechunk>=1.0",
+    "pillow",
+    "requests",
+]
+
+# Not a distribution — just an app folder.
+[tool.uv]
+package = false
